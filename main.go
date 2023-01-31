@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"math/big"
 )
@@ -13,9 +15,9 @@ func EncodePoint(x, y *big.Int) *big.Int {
 	return temp
 }
 
-func DecodePoint(stealthMetaAddress *big.Int) (*big.Int, *big.Int) {
+func DecodePoint(p *big.Int) (*big.Int, *big.Int) {
 	temp := new(big.Int).Lsh(big.NewInt(1), 256)
-	x, y := new(big.Int).DivMod(stealthMetaAddress, temp, new(big.Int))
+	x, y := new(big.Int).DivMod(p, temp, new(big.Int))
 	return x, y
 }
 
@@ -41,7 +43,7 @@ func main() {
 
 	stealthMetaAddress := EncodePoint(Mx, My)
 
-	fmt.Printf("stealthMetaAddress: %x\n", stealthMetaAddress.Bytes())
+	fmt.Printf("stealth meta-address : %x\n", stealthMetaAddress.Bytes())
 
 	// 2.
 	// Alice generates an ephemeral key r, and publishes the ephemeral public key R = G * r.
@@ -75,18 +77,26 @@ func main() {
 
 	fmt.Printf("P: (%x, %x)\n", Px.Bytes(), Py.Bytes())
 
+	stealthAddress := crypto.PubkeyToAddress(ecdsa.PublicKey{
+		Curve: secp256k1.S256(),
+		X:     Px,
+		Y:     Py,
+	})
+	fmt.Printf("stealth address: %s\n", stealthAddress.String())
+
 	// 5.
 	// To compute the private key for that address, Bob (and Bob alone) can compute p = m + hash(S)
 	p := new(big.Int).Add(m, hashS)
 
 	fmt.Printf("p: %x\n", p.Bytes())
 
-	// check public key
+	//6.
+	// private key to public key
 	publicKeyX, publicKeyY := secp256k1.S256().ScalarBaseMult(p.Bytes())
 
-	fmt.Printf("publicKey: (%x, %x)\n", publicKeyX.Bytes(), publicKeyY.Bytes())
+	fmt.Printf("public key: (%x, %x)\n", publicKeyX.Bytes(), publicKeyY.Bytes())
 
 	if Px.Cmp(publicKeyX) != 0 || Py.Cmp(publicKeyY) != 0 {
-		panic("publicKey not match")
+		panic("public key does not match")
 	}
 }
