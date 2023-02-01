@@ -16,31 +16,26 @@ func main() {
 	// The stealth meta-address is an encoding of M.
 
 	m, _ := new(big.Int).SetString("3b3b08bba24858f7ab8b302428379198e521359b19784a40aeb4daddf4ad911c", 16)
-
-	fmt.Printf("m: %x\n", m.Bytes())
-
 	Mx, My := secp256k1.S256().ScalarBaseMult(m.Bytes())
 	M := secp256k1.CompressPubkey(Mx, My)
 
+	fmt.Printf("m: %x\n", m.Bytes())
 	fmt.Printf("M: %x\n", M)
 
 	// 2.
 	// Alice generates an ephemeral key r, and publishes the ephemeral public key R = G * r.
 
 	r, _ := new(big.Int).SetString("9d23679323734fdf371017048b4a73cf160566a0ccd69fa087299888d9fbc59f", 16)
-
-	fmt.Printf("r: %x\n", r.Bytes())
-
 	Rx, Ry := secp256k1.S256().ScalarBaseMult(r.Bytes())
 	R := secp256k1.CompressPubkey(Rx, Ry)
 
+	fmt.Printf("r: %x\n", r.Bytes())
 	fmt.Printf("R: %x\n", R)
 
 	// 3.
 	// Alice can compute a shared secret S = M * r, and Bob can compute the same shared secret S = m * R.
 
-	Sx, Sy := secp256k1.S256().ScalarMult(Mx, My, r.Bytes()) // S = M * r
-
+	Sx, Sy := secp256k1.S256().ScalarMult(Mx, My, r.Bytes())   // S = M * r
 	S2x, S2y := secp256k1.S256().ScalarMult(Rx, Ry, m.Bytes()) // S = m * R
 
 	S := secp256k1.CompressPubkey(Sx, Sy)
@@ -48,7 +43,6 @@ func main() {
 
 	fmt.Printf("S : %x\n", S)
 	fmt.Printf("S2: %x\n", S2)
-
 	if string(S) != string(S2) {
 		panic("shared secret does not match")
 	}
@@ -60,8 +54,11 @@ func main() {
 	// Alice or Bob can compute P = M + G * hash(S)
 
 	hashS := new(big.Int).Mod(new(big.Int).SetBytes(S), secp256k1.S256().N) //  hash(S)
-	GSx, GSy := secp256k1.S256().ScalarBaseMult(hashS.Bytes())              //  G * hash(S)
-	Px, Py := secp256k1.S256().Add(Mx, My, GSx, GSy)                        //  M + G * hash(S)
+
+	//fmt.Printf("hashS: %x\n", hashS.Bytes())
+
+	GSx, GSy := secp256k1.S256().ScalarBaseMult(hashS.Bytes()) //  G * hash(S)
+	Px, Py := secp256k1.S256().Add(Mx, My, GSx, GSy)           //  M + G * hash(S)
 
 	P := secp256k1.CompressPubkey(Px, Py)
 	fmt.Printf("P: %x\n", P)
