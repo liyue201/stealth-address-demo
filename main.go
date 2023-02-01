@@ -8,24 +8,6 @@ import (
 	"math/big"
 )
 
-func EncodePoint(x, y *big.Int) *big.Int {
-	temp := new(big.Int).Set(x)
-	temp.Lsh(temp, 256)
-	temp.Add(temp, y)
-	return temp
-}
-
-func DecodePoint(p *big.Int) (*big.Int, *big.Int) {
-	temp := new(big.Int).Lsh(big.NewInt(1), 256)
-	x, y := new(big.Int).DivMod(p, temp, new(big.Int))
-	return x, y
-}
-
-func HashPointToField(x, y *big.Int) *big.Int {
-	temp := EncodePoint(x, y)
-	return new(big.Int).Mod(temp, secp256k1.S256().N)
-}
-
 func main() {
 
 	// 1.
@@ -38,12 +20,9 @@ func main() {
 	fmt.Printf("m: %x\n", m.Bytes())
 
 	Mx, My := secp256k1.S256().ScalarBaseMult(m.Bytes())
+	M := secp256k1.CompressPubkey(Mx, My)
 
-	fmt.Printf("M: (%x, %x)\n", Mx.Bytes(), My.Bytes())
-
-	stealthMetaAddress := EncodePoint(Mx, My)
-
-	fmt.Printf("stealth meta-address : %x\n", stealthMetaAddress.Bytes())
+	fmt.Printf("M: %x\n", M)
 
 	// 2.
 	// Alice generates an ephemeral key r, and publishes the ephemeral public key R = G * r.
@@ -53,17 +32,26 @@ func main() {
 	fmt.Printf("r: %x\n", r.Bytes())
 
 	Rx, Ry := secp256k1.S256().ScalarBaseMult(r.Bytes())
+	R := secp256k1.CompressPubkey(Rx, Ry)
 
-	fmt.Printf("R: (%x, %x)\n", Rx.Bytes(), Ry.Bytes())
+	fmt.Printf("R: %x\n", R)
 
 	// 3.
 	// Alice can compute a shared secret S = M * r, and Bob can compute the same shared secret S = m * R.
 
-	Sx, Sy := secp256k1.S256().ScalarMult(Mx, My, r.Bytes())
-	S2x, S2y := secp256k1.S256().ScalarMult(Rx, Ry, m.Bytes())
+	Sx, Sy := secp256k1.S256().ScalarMult(Mx, My, r.Bytes()) // S = M * r
 
-	fmt.Printf("S: (%x, %x)\n", Sx.Bytes(), Sy.Bytes())
-	fmt.Printf("S2: (%x, %x)\n", S2x.Bytes(), S2y.Bytes())
+	S2x, S2y := secp256k1.S256().ScalarMult(Rx, Ry, m.Bytes()) // S = m * R
+
+	S := secp256k1.CompressPubkey(Sx, Sy)
+	S2 := secp256k1.CompressPubkey(S2x, S2y)
+
+	fmt.Printf("S : %x\n", S)
+	fmt.Printf("S2: %x\n", S2)
+
+	if string(S) != string(S2) {
+		panic("shared secret does not match")
+	}
 
 	// 4.
 	// In general, in both Bitcoin and Ethereum (including correctly-designed ERC-4337 accounts),
@@ -71,18 +59,19 @@ func main() {
 	// So you can compute the address if you compute the public key. To compute the public key,
 	// Alice or Bob can compute P = M + G * hash(S)
 
-	hashS := HashPointToField(Sx, Sy)                          //  hash(S)
-	GSx, GSy := secp256k1.S256().ScalarBaseMult(hashS.Bytes()) //  G * hash(S)
-	Px, Py := secp256k1.S256().Add(Mx, My, GSx, GSy)           //  M + G * hash(S)
+	hashS := new(big.Int).Mod(new(big.Int).SetBytes(S), secp256k1.S256().N) //  hash(S)
+	GSx, GSy := secp256k1.S256().ScalarBaseMult(hashS.Bytes())              //  G * hash(S)
+	Px, Py := secp256k1.S256().Add(Mx, My, GSx, GSy)                        //  M + G * hash(S)
 
-	fmt.Printf("P: (%x, %x)\n", Px.Bytes(), Py.Bytes())
+	P := secp256k1.CompressPubkey(Px, Py)
+	fmt.Printf("P: %x\n", P)
 
 	stealthAddress := crypto.PubkeyToAddress(ecdsa.PublicKey{
 		Curve: secp256k1.S256(),
 		X:     Px,
 		Y:     Py,
 	})
-	fmt.Printf("stealth address: %s\n", stealthAddress.String())
+	fmt.Printf("A: %s\n", stealthAddress.String())
 
 	// 5.
 	// To compute the private key for that address, Bob (and Bob alone) can compute p = m + hash(S)
@@ -90,13 +79,13 @@ func main() {
 
 	fmt.Printf("p: %x\n", p.Bytes())
 
-	//6.
+	// 6.
 	// private key to public key
-	publicKeyX, publicKeyY := secp256k1.S256().ScalarBaseMult(p.Bytes())
+	P2x, P2y := secp256k1.S256().ScalarBaseMult(p.Bytes())
+	P2 := secp256k1.CompressPubkey(P2x, P2y)
 
-	fmt.Printf("public key: (%x, %x)\n", publicKeyX.Bytes(), publicKeyY.Bytes())
-
-	if Px.Cmp(publicKeyX) != 0 || Py.Cmp(publicKeyY) != 0 {
+	fmt.Printf("P2: %x\n", P2)
+	if string(P) != string(P2) {
 		panic("public key does not match")
 	}
 }
