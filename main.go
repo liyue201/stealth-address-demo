@@ -72,7 +72,8 @@ func main() {
 
 	// 5.
 	// To compute the private key for that address, Bob (and Bob alone) can compute p = m + hash(S)
-	p := new(big.Int).Add(m, hashS)
+	p := new(big.Int).Add(m, hashS)             // p = m + hash(S)
+	p = new(big.Int).Mod(p, secp256k1.S256().N) // p = p % N,  private key must be less than the order of the curve
 
 	fmt.Printf("p: %x\n", p.Bytes())
 
